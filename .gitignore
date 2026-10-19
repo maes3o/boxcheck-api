@@ -1,0 +1,38 @@
+.env
+venv/
+__pycache__/
+*.pyc
+frontend/.wrangler/
+.env*
+node_modules/
+.backups/
+vendor/
+test-files/
+# --- A0 (25.09.2026): secrets / credentials / local data ---
+*.pem
+*.key
+.cloudflared/
+cloudflared*.json
+*.log
+logs/
+.venv/
+playwright-report/
+test-results/
+# Umami / PostgreSQL data must never land in either repo
+umami/
+pgdata/
+*.sql
+*.dump
+
+# Stale pre-change backups and archives — git history replaces them (cleanup 25.09.2026)
+*.bak
+*.bak.*
+.pre_*
+*.zip
+
+# Committed template with placeholders only
+!.env.example
+
+# Research reference data (normalized from third-party PDFs): kept local, not in the repo.
+# Storage/provenance decision is pending (see PROGRESS.md, D-17).
+reference/

@@ -1,0 +1,1636 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BoxCheck — preflight PDF check</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" href="/favicon.ico">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --kraft:        #ddc9a3;
+    --kraft-dark:   #c2a875;
+    --kraft-line:   #a68f5f;
+    --ink:          #23261f;
+    --ink-soft:     #4b4c3f;
+    --rust:         #b8501f;
+    --rust-soft:    #e9c9b6;
+    --pine:         #1f7a3d;
+    --pine-soft:    #d7e1d0;
+    --amber:        #9c6f18;
+    --amber-soft:   #ecdcb5;
+    --crit:         #a3241c;
+    --crit-soft:    #e6c2bd;
+    --info:         #3f5f75;
+    --info-soft:    #d3dde3;
+    --paper:        #f3ead6;
+    --shadow:       rgba(35,38,31,0.18);
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  body{
+    background:
+      radial-gradient(ellipse at top left, rgba(255,255,255,0.10), transparent 55%),
+      var(--kraft);
+    background-attachment: fixed;
+    color:var(--ink);
+    font-family:'IBM Plex Mono', monospace;
+    min-height:100vh;
+    padding: 40px 18px 80px;
+  }
+  .sheet{
+    max-width: 760px;
+    margin: 0 auto;
+    position: relative;
+  }
+  /* crop marks */
+  .crop{ position:absolute; width:26px; height:26px; }
+  .crop::before, .crop::after{ content:""; position:absolute; background:var(--ink); }
+  .crop::before{ width:100%; height:2px; top:50%; }
+  .crop::after{ height:100%; width:2px; left:50%; }
+  .crop.tl{ top:-14px; left:-14px; }
+  .crop.tr{ top:-14px; right:-14px; }
+  .crop.bl{ bottom:-14px; left:-14px; }
+  .crop.br{ bottom:-14px; right:-14px; }
+
+  .langswitch{
+    position:absolute;
+    top:0; right:0;
+    display:flex;
+    border:1.5px solid var(--kraft-line);
+    font-size:11px;
+    letter-spacing:0.06em;
+    user-select:none;
+  }
+  .langswitch button{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px;
+    letter-spacing:0.06em;
+    background:var(--kraft);
+    color:var(--ink-soft);
+    border:none;
+    padding:6px 12px;
+    cursor:pointer;
+  }
+  .langswitch button:first-child{ border-right:1.5px solid var(--kraft-line); }
+  .langswitch button.active{ background:var(--ink); color:var(--paper); }
+
+  header{
+    text-align:center;
+    padding: 10px 0 28px;
+  }
+  .eyebrow{
+    font-size:12px;
+    letter-spacing:0.14em;
+    color:var(--ink-soft);
+  }
+  h1{
+    margin: 6px 0 8px;
+  }
+  .logo-img{
+    height:52px;
+    width:auto;
+    display:block;
+    margin:0 auto;
+  }
+  .sub{
+    font-size:13px;
+    color:var(--ink-soft);
+    max-width:480px;
+    margin:0 auto;
+    line-height:1.5;
+  }
+
+  .panel{
+    background:var(--paper);
+    border:1.5px solid var(--kraft-line);
+    box-shadow: 0 10px 0 -6px var(--shadow), 0 2px 10px var(--shadow);
+    padding: 26px;
+    margin-bottom: 22px;
+  }
+  .panel h2{
+    font-family:'Roboto Slab', serif;
+    font-size:16px;
+    margin:0 0 16px;
+    display:flex;
+    align-items:baseline;
+    gap:8px;
+  }
+  .panel h2 .num{ color:var(--rust); }
+
+  /* print method selector, looks like carton flap tabs */
+  .methods{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:18px; }
+  .method{
+    position:relative;
+    text-align:center;
+    padding:10px 6px;
+    border:1.5px solid var(--kraft-line);
+    background:var(--kraft);
+    cursor:pointer;
+    font-size:12.5px;
+    color:var(--ink-soft);
+    user-select:none;
+    clip-path: polygon(8px 0, 100% 0, 100% 100%, 0 100%, 0 8px);
+    transition: background .15s, color .15s, border-color .15s, box-shadow .15s;
+  }
+  .method-wrap{ flex:1 1 auto; }
+  .method-hint{
+    font-size:10.5px;
+    color:var(--ink-soft);
+    line-height:1.35;
+    margin-top:6px;
+    padding:0 2px;
+  }
+  .method:hover{ border-color:var(--rust); }
+  .method.active{
+    background:var(--ink);
+    color:var(--paper);
+    border-color:var(--rust);
+    font-weight:700;
+    box-shadow: 0 0 0 2px var(--rust);
+  }
+  .method.active::after{
+    content:"✓";
+    position:absolute;
+    top:2px; right:7px;
+    font-size:11px;
+    color:var(--rust-soft);
+  }
+  .method-unsure-hint{
+    font-size:11px;
+    color:var(--ink-soft);
+    text-align:center;
+    margin:2px 0 10px;
+  }
+
+  .drop{
+    border: 2px dashed var(--kraft-line);
+    background: repeating-linear-gradient(135deg, transparent, transparent 10px, rgba(166,143,95,0.06) 10px, rgba(166,143,95,0.06) 20px);
+    padding: 36px 18px;
+    text-align:center;
+    cursor:pointer;
+    transition: border-color .15s, background .15s;
+  }
+  .drop.drag{ border-color:var(--rust); background:var(--rust-soft); }
+  .drop.hasfile{ border-style:solid; border-color:var(--pine); }
+  .drop-icon{
+    width:52px; height:52px; margin:0 auto 12px;
+    display:block;
+    color: var(--ink-soft);
+  }
+  .drop-title{ font-size:14px; color:var(--ink); margin-bottom:4px; font-weight:600; }
+  .drop-sub{ font-size:11.5px; color:var(--ink-soft); }
+  #fileInput{ display:none; }
+
+  details.adv{ margin-top:18px; }
+  details.adv summary{
+    cursor:pointer;
+    font-size:12px;
+    color:var(--ink-soft);
+    letter-spacing:0.04em;
+  }
+  .adv-grid{
+    display:flex; gap:14px; flex-wrap:wrap;
+    margin-top:14px;
+  }
+  .field{ flex:1 1 140px; }
+  .field label{ display:block; font-size:11px; color:var(--ink-soft); margin-bottom:5px; }
+  .field input, .field select{
+    width:100%;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:13px;
+    padding:8px 9px;
+    border:1.5px solid var(--kraft-line);
+    background:var(--kraft);
+    color:var(--ink);
+  }
+
+  .run-btn{
+    margin-top:20px;
+    width:100%;
+    padding:14px;
+    background:var(--rust);
+    color:var(--paper);
+    border:none;
+    font-family:'Roboto Slab', serif;
+    font-weight:700;
+    font-size:15px;
+    letter-spacing:0.02em;
+    cursor:pointer;
+    transition: background .15s;
+  }
+  .run-btn:hover{ background:#9b3f16; }
+  .run-btn:disabled{ background:var(--kraft-line); cursor:default; }
+
+  .new-check-btn{
+    margin-top:20px;
+    width:100%;
+    padding:12px;
+    background:var(--kraft);
+    color:var(--ink);
+    border:1.5px solid var(--kraft-line);
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12.5px;
+    cursor:pointer;
+  }
+  .new-check-btn:hover{ border-color:var(--rust); }
+
+  .status{
+    text-align:center;
+    font-size:12.5px;
+    color:var(--ink-soft);
+    margin-top:12px;
+    min-height: 16px;
+  }
+  .status.err{ color:var(--rust); }
+
+  /* results */
+  .report-head{
+    display:flex; justify-content:space-between; align-items:flex-end;
+    border-bottom:2px solid var(--ink); padding-bottom:10px; margin-bottom:14px;
+  }
+  .report-head .fn{ font-size:14px; font-weight:600; word-break:break-all; }
+  .report-head .meta{ font-size:11px; color:var(--ink-soft); text-align:right; }
+
+  .row{
+    display:flex; gap:14px; align-items:flex-start;
+    padding:14px 10px;
+    margin:0 -10px;
+    border-bottom:1px solid var(--kraft-line);
+  }
+  .row:last-child{ border-bottom:none; }
+  .row.warn{ background:rgba(184,80,31,0.08); }
+  .row.crit{ background:rgba(163,36,28,0.10); }
+  .stamp{
+    flex:0 0 74px;
+    text-align:center;
+    font-family:'Roboto Slab', serif;
+    font-weight:700;
+    font-size:11.5px;
+    letter-spacing:0.06em;
+    padding:6px 4px;
+    border:2px solid currentColor;
+    transform:rotate(-3deg);
+  }
+  .stamp.pass{ color:var(--pine); }
+  .stamp.warn{ color:var(--rust); }
+  .stamp.crit{ color:var(--crit); }
+  .stamp.info{ color:var(--info); }
+  .row-body{ flex:1; }
+  .row-title{ font-size:13.5px; font-weight:600; margin-bottom:3px; }
+  .row-detail{ font-size:12px; color:var(--ink-soft); line-height:1.5; }
+  .row-detail .val{ color:var(--ink); }
+  .row-detail-line{ margin-bottom:2px; }
+
+  .method-note{
+    font-size:11px;
+    color:var(--ink-soft);
+    margin:-10px 0 16px;
+    line-height:1.4;
+  }
+  .upload-limits{
+    font-size:10.5px;
+    color:var(--ink-soft);
+    text-align:center;
+    margin-top:8px;
+  }
+  .drop-file-actions{
+    display:flex;
+    justify-content:center;
+    gap:10px;
+    margin-top:10px;
+  }
+  .drop-file-actions button{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11.5px;
+    padding:7px 12px;
+    border:1.5px solid var(--kraft-line);
+    background:var(--kraft);
+    color:var(--ink);
+    cursor:pointer;
+  }
+  .drop-file-actions button:hover{ border-color:var(--rust); }
+  .drop-file-actions button.danger{ color:var(--rust); }
+
+  .summary-box{
+    border:1.5px solid var(--kraft-line);
+    background:var(--kraft);
+    padding:16px;
+    margin-bottom:22px;
+  }
+  .summary-message{
+    font-size:13px;
+    line-height:1.5;
+    color:var(--ink);
+    text-align:center;
+    margin-bottom:14px;
+  }
+  .summary-stats{
+    display:flex; flex-wrap:wrap; gap:10px;
+    margin-bottom:14px;
+  }
+  .summary-stat{
+    flex:1 1 auto;
+    text-align:center;
+    padding:8px 4px;
+  }
+  .summary-num{ display:block; font-family:'Roboto Slab', serif; font-weight:700; font-size:22px; }
+  .summary-label{ display:block; font-size:10px; color:var(--ink-soft); margin-top:2px; line-height:1.3; }
+  .summary-stat.crit .summary-num{ color:var(--crit); }
+  .summary-stat.warn .summary-num{ color:var(--rust); }
+  .summary-stat.info .summary-num{ color:var(--info); }
+  .summary-stat.total .summary-num{ color:var(--ink); }
+  .summary-status{
+    text-align:center;
+    font-family:'Roboto Slab', serif;
+    font-weight:700;
+    font-size:14px;
+    padding:10px;
+    border:1.5px solid currentColor;
+  }
+  .summary-status.status-ready{ color:var(--pine); }
+  .summary-status.status-manual{ color:var(--rust); }
+  .summary-status.status-critical{ color:var(--crit); }
+
+  .quiz-link{
+    display:block;
+    background:none;
+    border:none;
+    padding:0;
+    margin:-6px 0 14px;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12px;
+    color:var(--ink-soft);
+    text-decoration:underline;
+    cursor:pointer;
+  }
+  .quiz-link:hover{ color:var(--rust); }
+  .quiz-panel{
+    background:var(--kraft);
+    border:1.5px dashed var(--kraft-line);
+    padding:18px;
+    margin-bottom:18px;
+  }
+  .quiz-q{ margin-bottom:16px; }
+  .quiz-q:last-child{ margin-bottom:0; }
+  .quiz-q-title{ font-size:13px; font-weight:600; margin-bottom:10px; }
+  .quiz-q-hint{ font-size:11px; color:var(--ink-soft); margin-bottom:10px; margin-top:-6px; }
+
+  .thresholds-section{
+    margin-top:18px;
+    padding-top:18px;
+    border-top:1.5px dashed var(--kraft-line);
+    margin-bottom:18px;
+  }
+  #th-dpi-custom{ margin-top:8px; }
+  .thresholds-summary{
+    font-size:11.5px;
+    color:var(--ink-soft);
+    margin-top:16px;
+    padding-top:14px;
+    border-top:1px solid var(--kraft-line);
+  }
+  .thresholds-intro-note{
+    font-size:11px;
+    color:var(--ink-soft);
+    line-height:1.4;
+    margin-bottom:6px;
+  }
+  .thresholds-toggle{
+    display:block;
+    background:none;
+    border:none;
+    padding:0;
+    margin-bottom:14px;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:13px;
+    font-weight:600;
+    color:var(--ink);
+    text-decoration:underline;
+    cursor:pointer;
+  }
+  .thresholds-toggle:hover{ color:var(--rust); }
+  .thresholds-actions{
+    display:flex; flex-wrap:wrap; gap:10px;
+    margin-top:14px;
+  }
+  .thresholds-actions button{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11.5px;
+    padding:9px 14px;
+    border:1.5px solid var(--kraft-line);
+    background:var(--kraft);
+    color:var(--ink);
+    cursor:pointer;
+  }
+  .thresholds-actions button:hover{ border-color:var(--rust); }
+  .thresholds-actions button.secondary{ color:var(--ink-soft); }
+  .thresholds-note{
+    font-size:11.5px;
+    color:var(--pine);
+    margin-top:10px;
+    min-height:14px;
+  }
+
+  footer{
+    text-align:center;
+    font-size:11px;
+    color:var(--ink-soft);
+    margin-top: 30px;
+  }
+  .footer-links{
+    display:flex;
+    justify-content:center;
+    gap:16px;
+    margin-bottom:12px;
+  }
+  .footer-link{
+    background:none;
+    border:none;
+    padding:0;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px;
+    color:var(--ink-soft);
+    text-decoration:underline;
+    cursor:pointer;
+  }
+  .footer-link:hover{ color:var(--rust); }
+  .footer-panel{
+    max-width:480px;
+    margin:0 auto 14px;
+    padding:14px;
+    text-align:left;
+    background:var(--kraft);
+    border:1.5px dashed var(--kraft-line);
+    font-size:11.5px;
+    color:var(--ink-soft);
+    line-height:1.5;
+  }
+
+  .feedback-fab{
+    position:fixed;
+    bottom:20px; right:20px;
+    z-index:40;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12px;
+    letter-spacing:0.03em;
+    padding:11px 18px;
+    background:var(--rust);
+    color:var(--paper);
+    border:none;
+    cursor:pointer;
+    box-shadow:0 2px 8px rgba(0,0,0,.25);
+  }
+  .feedback-fab:hover{ background:#9b3f16; }
+  .feedback-panel{
+    position:fixed;
+    bottom:66px; right:20px;
+    z-index:41;
+    width:min(260px, calc(100vw - 40px));
+    background:var(--paper);
+    border:1.5px solid var(--ink);
+    padding:16px;
+    box-shadow:0 4px 16px rgba(0,0,0,.3);
+  }
+  .feedback-panel-title{ font-size:13px; font-weight:600; margin-bottom:10px; }
+  .feedback-panel textarea{
+    width:100%;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12.5px;
+    padding:8px 9px;
+    border:1.5px solid var(--kraft-line);
+    background:var(--kraft);
+    color:var(--ink);
+    resize:vertical;
+    margin-bottom:10px;
+  }
+  .feedback-actions{ display:flex; flex-wrap:wrap; gap:10px; margin-top:12px; }
+  .feedback-actions button{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11.5px;
+    padding:9px 14px;
+    border:1.5px solid var(--kraft-line);
+    background:var(--kraft);
+    color:var(--ink);
+    cursor:pointer;
+  }
+  .feedback-actions button:hover{ border-color:var(--rust); }
+  .feedback-actions button.secondary{ color:var(--ink-soft); }
+  .feedback-success{
+    text-align:center;
+    font-family:'Roboto Slab', serif;
+    font-weight:700;
+    font-size:14px;
+    color:var(--pine);
+    padding:14px 0;
+  }
+  .feedback-note{ font-size:11.5px; color:var(--rust); margin-top:10px; min-height:14px; }
+
+  @media (max-width:480px){
+    .logo-img{ height:40px; }
+    .panel{ padding:18px; }
+    .langswitch{ position:static; display:inline-flex; margin-bottom:10px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="sheet">
+  <div class="crop tl"></div><div class="crop tr"></div>
+  <div class="crop bl"></div><div class="crop br"></div>
+
+  <div class="langswitch" id="langswitch">
+    <button data-lang="en">EN</button>
+    <button data-lang="uk">UA</button>
+  </div>
+
+  <header>
+    <div class="eyebrow" id="txt-eyebrow"></div>
+    <h1><img src="/logo.svg" alt="BoxCheck" class="logo-img"></h1>
+    <p class="sub" id="txt-sub"></p>
+  </header>
+
+  <div class="panel">
+    <h2><span class="num">01</span> <span id="txt-h2-method"></span></h2>
+    <div class="methods" id="methods">
+      <div class="method-wrap">
+        <div class="method" data-v="carton"></div>
+        <div class="method-hint" data-v="carton"></div>
+      </div>
+      <div class="method-wrap">
+        <div class="method" data-v="label"></div>
+        <div class="method-hint" data-v="label"></div>
+      </div>
+      <div class="method-wrap">
+        <div class="method" data-v="flexible"></div>
+        <div class="method-hint" data-v="flexible"></div>
+      </div>
+      <div class="method-wrap">
+        <div class="method" data-v="digital"></div>
+        <div class="method-hint" data-v="digital"></div>
+      </div>
+      <div class="method-wrap">
+        <div class="method active" data-v="unknown"></div>
+      </div>
+    </div>
+    <div class="method-unsure-hint" id="txt-method-unsure-hint"></div>
+    <div class="method-note" id="txt-method-note"></div>
+
+    <button type="button" class="quiz-link" id="quizLink"></button>
+
+    <div class="quiz-panel" id="quizPanel" hidden>
+      <div class="quiz-q">
+        <div class="quiz-q-title" id="txt-quiz-q2"></div>
+        <div class="quiz-q-hint" id="txt-quiz-q2-hint"></div>
+        <div class="adv-grid">
+          <div class="field">
+            <label id="txt-quiz-width-label"></label>
+            <input type="number" id="quizWidth" step="1" min="0">
+          </div>
+          <div class="field">
+            <label id="txt-quiz-height-label"></label>
+            <input type="number" id="quizHeight" step="1" min="0">
+          </div>
+        </div>
+      </div>
+      <div class="quiz-q" id="quizCaliperQ" hidden>
+        <div class="quiz-q-title" id="txt-quiz-caliper-title"></div>
+        <div class="quiz-q-hint" id="txt-quiz-caliper-hint"></div>
+        <div class="adv-grid">
+          <div class="field">
+            <label id="txt-quiz-caliper-label"></label>
+            <input type="number" id="quizCaliper" step="0.1" min="0">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="thresholds-section">
+      <div class="thresholds-intro-note" id="txt-thresholds-intro-note"></div>
+      <button type="button" class="thresholds-toggle" id="thresholdsToggle"></button>
+      <div class="thresholds-body" id="thresholdsBody" hidden>
+        <div class="adv-grid">
+          <div class="field">
+            <label id="txt-th-bleed-label"></label>
+            <input type="number" id="th-bleed" step="1">
+          </div>
+          <div class="field">
+            <label id="txt-th-dpi-label"></label>
+            <select id="th-dpi-select">
+              <option value="72">72</option>
+              <option value="150">150</option>
+              <option value="300">300</option>
+              <option value="other" id="opt-dpi-custom"></option>
+            </select>
+            <input type="number" id="th-dpi-custom" step="1" hidden>
+          </div>
+          <div class="field">
+            <label id="txt-th-hairline-label"></label>
+            <input type="number" id="th-hairline" step="0.05">
+          </div>
+        </div>
+        <div class="thresholds-actions">
+          <button id="saveThresholdsBtn"></button>
+          <button class="secondary" id="resetThresholdsBtn"></button>
+        </div>
+        <div class="thresholds-note" id="thresholdsSaveNote"></div>
+      </div>
+    </div>
+
+    <h2><span class="num">02</span> <span id="txt-h2-file"></span></h2>
+    <div class="drop" id="drop">
+      <svg class="drop-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4">
+        <path d="M12 3v12m0 0-4-4m4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>
+      </svg>
+      <div class="drop-title" id="dropTitle"></div>
+      <div class="drop-sub" id="dropSub"></div>
+      <input type="file" id="fileInput" accept="application/pdf">
+    </div>
+    <div class="drop-file-actions" id="dropFileActions" hidden>
+      <button type="button" id="replaceFileBtn"></button>
+      <button type="button" class="danger" id="removeFileBtn"></button>
+    </div>
+    <div class="upload-limits" id="txt-upload-limits"></div>
+
+    <button class="run-btn" id="runBtn" disabled></button>
+    <div class="status" id="status"></div>
+  </div>
+
+  <div class="panel" id="resultsPanel" style="display:none;">
+    <div class="report-head">
+      <div class="fn" id="resFn"></div>
+      <div class="meta" id="resMeta"></div>
+    </div>
+    <div class="summary-box" id="summaryBox"></div>
+    <div id="resultsBody"></div>
+    <div class="thresholds-summary" id="thresholdsSummary"></div>
+    <button type="button" class="new-check-btn" id="newCheckBtn"></button>
+
+    <button type="button" class="feedback-fab" id="feedbackFab"></button>
+    <div class="feedback-panel" id="feedbackPanel" hidden>
+      <div id="feedbackForm">
+        <div class="feedback-panel-title" id="txt-feedback-title"></div>
+        <textarea id="feedbackMessage" rows="4"></textarea>
+        <div class="field">
+          <label id="txt-feedback-email-label"></label>
+          <input type="email" id="feedbackEmail">
+        </div>
+        <div class="feedback-actions">
+          <button type="button" id="feedbackSendBtn"></button>
+          <button type="button" class="secondary" id="feedbackCancelBtn"></button>
+        </div>
+        <div class="feedback-note" id="feedbackNote"></div>
+      </div>
+      <div class="feedback-success" id="feedbackSuccess" hidden></div>
+    </div>
+  </div>
+
+  <footer>
+    <nav class="footer-links">
+      <button type="button" class="footer-link" id="footerAboutToggle"></button>
+      <button type="button" class="footer-link" id="footerPrivacyToggle"></button>
+      <a href="#" class="footer-link" id="footerContactLink"></a>
+    </nav>
+    <div class="footer-panel" id="footerAboutPanel" hidden></div>
+    <div class="footer-panel" id="footerPrivacyPanel" hidden></div>
+    <p id="txt-footer"></p>
+  </footer>
+</div>
+
+<script src="severity.js"></script>
+<script>
+const API_BASE = "https://api.boxcheck.org";
+const MAX_FILE_SIZE_MB = 25;
+
+const I18N = {
+  en: {
+    eyebrow: "PREPRESS · PACKAGING · LAYOUT CHECK",
+    sub: "Check your packaging PDF before it goes to print — BoxCheck finds issues with bleed, colors, resolution, fonts, and cut lines, explained in plain language. For boxes, labels, and flexible packaging.",
+    h2_method: "Print method",
+    h2_file: "Layout file",
+    methods: { carton: "Carton", label: "Label", flexible: "Film / flexo", digital: "Digital print", unknown: "Not sure" },
+    drop_title_empty: "Drag a PDF here or click",
+    drop_sub_empty: "one .pdf file accepted",
+    drop_sub_ready: (mb) => `${mb} MB — ready to check`,
+    run_btn: "Check PDF layout",
+    run_btn_busy: "Checking…",
+    status_uploading: "Uploading and analyzing file…",
+    status_done: "Done.",
+    status_error: "Error: ",
+    err_pdf_only: "Only PDF files are accepted.",
+    err_file_too_large: (mb, max) => `File too large (${mb} MB). Max ${max} MB.`,
+    footer: "BoxCheck performs an automated technical check of your PDF. It cannot guarantee compatibility with a specific press, inks, substrate, or a print shop's internal requirements. Confirm the file with your printer before running the job.",
+    footer_about_title: "About",
+    footer_about_text: "BoxCheck was built by a solo developer tired of seeing good packaging layouts come back from print with cropped text. It's a small tool for a quick self-check before you send your file off.",
+    footer_privacy_title: "Privacy",
+    footer_privacy_text: "Your PDF is processed in the server's memory and never written to disk. We don't look at file contents or use them for anything else.",
+    footer_contact_title: "Contact",
+    method_note: "The profile affects the recommended bleed, minimum line thickness, and resolution.",
+    method_unsure_hint: "Not sure? Leave it on \"Not sure\" — the check will run either way.",
+    upload_limits: (max) => `No signup · Up to ${max} MB · File not stored · Results in seconds`,
+    replace_file_btn: "Replace file",
+    remove_file_btn: "Remove file",
+    new_check_btn: "Check another file",
+    stamp_ok: "OK",
+    stamp_warn: "WARN",
+    stamp_crit: "CRITICAL",
+    stamp_info: "INFO",
+    summary_critical: "Critical issues",
+    summary_warning: "Needs attention",
+    summary_info: "Informational",
+    summary_checked: "Checked",
+    summary_status_ready: "Ready to print",
+    summary_status_manual: "Needs manual review",
+    summary_status_critical: "Has critical issues",
+    summary_message_ready: "The file passed the automated check. No critical issues found.",
+    summary_message_manual: (n) => `The file can move to the next step after reviewing ${n} item${n === 1 ? '' : 's'} flagged below.`,
+    summary_message_critical: "This file is not recommended for print yet. Fix the critical issues first.",
+    profiles: { carton: "Carton", label: "Label", flexible: "Film / flexo", digital: "Digital print", unknown: "Unknown" },
+    print_method_not_specified: "Print method: not specified",
+    res_meta: (label, pages) => `${label} · pages: ${pages}`,
+    bleed_title: "Bleed",
+    bleed_expected: (need) => `Expected: <span class="val">≥${need} mm</span>`,
+    bleed_detected: (have) => `Detected: <span class="val">${have} mm</span>`,
+    bleed_no_box: "TrimBox/CropBox not set separately from MediaBox — not enough data to confirm bleed, check manually",
+    bleed_dieline_note: "Cut line detected — rectangular bleed check does not apply here. Please verify bleed against the die line manually.",
+    images_title: "Raster images",
+    images_none: "No raster images found on the page.",
+    rgb_title: "Image color space",
+    rgb_ok: (n) => n === 1 ? `OK — 1 image uses CMYK/grayscale.` : `OK — all ${n} images use CMYK/grayscale.`,
+    rgb_bad: (bad, total) => `<span class="val">${bad} of ${total}</span> image(s) in RGB — needs CMYK/spot.`,
+    dpi_title: "Image resolution",
+    dpi_ok: (dpi) => `All images ≥ ${dpi} DPI.`,
+    dpi_bad: (bad, total, dpi, list) => `<span class="val">${bad} of ${total}</span> below ${dpi} DPI: ${list}`,
+    hairline_title: "Hairlines",
+    hairline_ok: "No lines thinner than the threshold were found.",
+    hairline_bad: (n, label) => `Found <span class="val">${n}</span> line(s) thinner than the threshold for profile "${label}".`,
+    fonts_title: "Fonts",
+    fonts_ok: "All fonts are embedded.",
+    fonts_bad: (list) => `Not embedded: <span class="val">${list || '—'}</span>`,
+    overprint_title: "Overprint",
+    overprint_ok: "No white overprint found.",
+    overprint_bad: "Found white objects with overprint enabled — they may disappear when printed (not printed over the substrate).",
+    overprint_black_note: (n) => `Black overprint: <span class="val">${n}</span> — normal practice (rich black), no action needed.`,
+    overprint_other_note: (n) => `Other-color overprint: <span class="val">${n}</span> — check manually that this is intentional; it can shift colors on non-black objects when printed.`,
+    trim_marks_title: "Trim marks",
+    trim_marks_ok: "Trim marks found near the page corners.",
+    trim_marks_bad: "Not automatically assessed — depends on your print shop's requirements. Some print shops require trim/crop marks; check with your printer, or add them in your design software (e.g. Illustrator's \"Printer's Marks\").",
+    page_size_title: "Page size consistency",
+    page_size_ok: "All pages are the same size.",
+    page_size_bad: (count, list) => `<span class="val">${count}</span> page(s) have a different size than page 1 (${list}) — a common export mistake that can cause pages to be cropped or misprinted.`,
+    spot_colors_title: "Spot colors",
+    spot_colors_none: "No spot/plate colors found (process colors only).",
+    spot_colors_list: (list) => `Found: ${list}`,
+    spot_colors_conflict_note: " · ⚠ same name used with different color values — likely two different colors accidentally sharing one name.",
+    quiz_link_text: "Add finished size (optional) →",
+    feedback_fab: "Feedback",
+    feedback_title: "Got feedback or found a bug?",
+    feedback_message_placeholder: "What happened, or what would help?",
+    feedback_email_label: "Your email (optional, for a reply)",
+    feedback_send: "Send",
+    feedback_cancel: "Cancel",
+    feedback_empty_note: "Write a few words first.",
+    feedback_sending: "Sending…",
+    feedback_success_message: "Thanks for the feedback!",
+    feedback_send_error: "Couldn't send, please try again in a moment.",
+    method_hints: {
+      carton: "Carton — a rigid box or carton that holds its shape.",
+      label: "Label — a sticker on a jar, bottle, or product.",
+      flexible: "Flexible packaging — pouch, bag, stretch film.",
+      digital: "Digital print — your own printer or digital printing, no plates/film.",
+    },
+    quiz_q2_title: "Final trimmed size (optional)",
+    quiz_q2_hint: "We'll compare it with your file after the check.",
+    quiz_width_label: "Width (mm)",
+    quiz_height_label: "Height (mm)",
+    quiz_caliper_title: "Board thickness (optional, carton only)",
+    quiz_caliper_hint: "We'll suggest rough glue-flap and crease-spacing minimums — a general guideline, not a strict spec.",
+    quiz_caliper_label: "Thickness (mm)",
+    caliper_recommendation_title: "Caliper-based recommendation",
+    caliper_recommendation_text: (caliper, flapLow, flapHigh, creaseMin) =>
+      `Starting point for <span class="val">${caliper} mm</span> board: glue flap <span class="val">${flapLow}–${flapHigh} mm</span>, minimum crease spacing <span class="val">${creaseMin} mm</span>. This is not an engineering standard — always confirm final dimensions with your box manufacturer, as they depend on carton style and equipment.`,
+    caliper_recommendation_thick_note: "For board this thick, differences between manufacturers' equipment are especially significant — confirming exact dimensions before print is essential.",
+    dieline_title: "Cut/crease line names",
+    dieline_intro: (list) => `Found names that often mark cut/crease/glue lines: ${list}. Detected by common naming only — check manually if your file uses different labels.`,
+    dieline_cat_cut: "Cut",
+    dieline_cat_crease: "Crease/fold",
+    dieline_cat_glue: "Glue",
+    dieline_cat_die: "Die",
+    dieline_cat_perforation: "Perforation",
+    declared_size_title: "Declared size",
+    declared_size_match: (w, h, aw, ah) => `You said <span class="val">${w}×${h} mm</span> — the file is ${aw}×${ah} mm, matches.`,
+    declared_size_mismatch: (w, h, aw, ah) => `You said <span class="val">${w}×${h} mm</span>, but the file is <span class="val">${aw}×${ah} mm</span> — double-check you uploaded the right file.`,
+    pdfx_title: "PDF/X format",
+    pdfx_not_declared: "Not a PDF/X file — most everyday PDFs aren't. Check your print shop's requirements if you need one.",
+    pdfx_declared_ok: (version) => `Declared as <span class="val">${version}</span>, with a valid color profile — ready for a print shop that requires PDF/X.`,
+    pdfx_declared_no_icc: (version) => `Declared as <span class="val">${version}</span>, but missing the required color profile. Not fully valid PDF/X despite the label — re-export with color management/output intent enabled.`,
+    pdfx_declared_no_oi: (version) => `Declared as <span class="val">${version}</span>, but has no color-profile information at all — not a valid PDF/X file despite the label.`,
+    mysettings_title: "Advanced parameters",
+    thresholds_intro_note: "These values are already tuned for the selected print method. Only change them if your print shop asks for something different.",
+    th_bleed_label: "Bleed (mm)",
+    th_dpi_label: "Min. resolution (DPI)",
+    th_hairline_label: "Hairline (mm)",
+    dpi_option_other: "Other",
+    save_thresholds_btn: (methodLabel) => `Save as my defaults for ${methodLabel}`,
+    reset_thresholds_btn: "Reset to defaults",
+    thresholds_saved_note: (methodLabel) => `Saved as your defaults for ${methodLabel}.`,
+    thresholds_reset_note: "Reset to standard defaults.",
+    thresholds_summary: (bleed, dpi, hairline) => `Thresholds used: bleed ${bleed} mm · ${dpi} DPI · hairline ${hairline} mm`,
+    errcode: {
+      file_too_large: (max) => `File too large. Max ${max} MB.`,
+      rate_limited: () => `Too many requests. Please wait a minute and try again.`,
+      timeout: (s) => `Processing timed out after ${s}s. Try a smaller or simpler file.`,
+      invalid_pdf: () => `This file is damaged or not a valid PDF. Try exporting it again.`,
+      encrypted_pdf: () => `This PDF is password-protected. Remove the password and upload it again.`,
+    },
+  },
+  uk: {
+    eyebrow: "ПРЕПРЕС · ПАКОВАННЯ · КОНТРОЛЬ МАКЕТА",
+    sub: "Перевірте PDF-макет упаковки перед друком — BoxCheck знаходить проблеми з вильотами, кольорами, роздільністю, шрифтами та лініями висічки зрозумілою мовою. Для коробок, етикеток і гнучкої упаковки.",
+    h2_method: "Метод друку",
+    h2_file: "Файл макета",
+    methods: { carton: "Картон", label: "Етикетка", flexible: "Плівка / флексо", digital: "Цифровий друк", unknown: "Не знаю" },
+    drop_title_empty: "Перетягни PDF сюди або клікни",
+    drop_sub_empty: "приймається один файл .pdf",
+    drop_sub_ready: (mb) => `${mb} МБ — готово до перевірки`,
+    run_btn: "Перевірити PDF-макет",
+    run_btn_busy: "Перевіряємо…",
+    status_uploading: "Завантажуємо та аналізуємо файл…",
+    status_done: "Готово.",
+    status_error: "Помилка: ",
+    err_pdf_only: "Приймаються лише PDF-файли.",
+    err_file_too_large: (mb, max) => `Файл завеликий (${mb} МБ). Максимум ${max} МБ.`,
+    footer: "BoxCheck виконує автоматичну технічну перевірку PDF. Він не може гарантувати відповідність конкретній машині, фарбам, матеріалу чи внутрішнім вимогам друкарні. Перед запуском тиражу узгодьте файл із виробником.",
+    footer_about_title: "Про проєкт",
+    footer_about_text: "BoxCheck зробив один розробник, який втомився бачити, як гарні макети упаковки повертаються з друку з обрізаним текстом. Це невеликий інструмент для швидкої самоперевірки перед тим, як відправити файл далі.",
+    footer_privacy_title: "Приватність",
+    footer_privacy_text: "Ваш PDF обробляється в оперативній пам'яті сервера і ніколи не записується на диск. Ми не переглядаємо вміст файлів і не використовуємо їх для жодних інших цілей.",
+    footer_contact_title: "Зв'язок",
+    method_note: "Профіль впливає на рекомендований виліт, мінімальну товщину лінії та роздільність.",
+    method_unsure_hint: "Не впевнені? Залиште «Не знаю» — перевірка однаково запуститься.",
+    upload_limits: (max) => `Без реєстрації · До ${max} MB · Файл не зберігається · Результат за кілька секунд`,
+    replace_file_btn: "Замінити файл",
+    remove_file_btn: "Видалити файл",
+    new_check_btn: "Перевірити інший файл",
+    stamp_ok: "ОК",
+    stamp_warn: "УВАГА",
+    stamp_crit: "КРИТИЧНО",
+    stamp_info: "ІНФО",
+    summary_critical: "Критичних помилок",
+    summary_warning: "Потребують уваги",
+    summary_info: "Інформаційно",
+    summary_checked: "Перевірено",
+    summary_status_ready: "Готово до друку",
+    summary_status_manual: "Потрібна ручна перевірка",
+    summary_status_critical: "Є критичні проблеми",
+    summary_message_ready: "Файл пройшов автоматичну перевірку. Критичних проблем не знайдено.",
+    summary_message_manual: (n) => {
+      const mod10 = n % 10, mod100 = n % 100;
+      const word = (mod10 === 1 && mod100 !== 11) || (mod10 >= 2 && mod10 <= 4 && !(mod100 >= 12 && mod100 <= 14))
+        ? 'питання' : 'питань';
+      return `Файл можна передавати на наступний етап після перевірки ${n} ${word}, позначених нижче.`;
+    },
+    summary_message_critical: "Файл не рекомендується передавати у друк. Спочатку виправте критичні проблеми.",
+    profiles: { carton: "Картон", label: "Етикетка", flexible: "Плівка / флексо", digital: "Цифровий друк", unknown: "Невизначено" },
+    print_method_not_specified: "Метод друку: не вказано",
+    res_meta: (label, pages) => `${label} · стор.: ${pages}`,
+    bleed_title: "Виліт за обріз",
+    bleed_expected: (need) => `Очікувано: <span class="val">≥${need} мм</span>`,
+    bleed_detected: (have) => `Виявлено: <span class="val">${have} мм</span>`,
+    bleed_no_box: "TrimBox/CropBox не задано окремо від MediaBox — недостатньо даних для перевірки вильоту, перевір вручну",
+    bleed_dieline_note: "Знайдено лінію висічки — перевірка вильоту за прямокутним контуром тут не застосовна. Перевірте виліт відносно лінії різу вручну.",
+    images_title: "Растрові зображення",
+    images_none: "Растрових зображень на сторінці не знайдено.",
+    rgb_title: "Кольоровий простір зображень",
+    rgb_ok: (n) => n === 1 ? `OK — 1 зображення у CMYK/Grayscale.` : `OK — усі ${n} зображень у CMYK/Grayscale.`,
+    rgb_bad: (bad, total) => `<span class="val">${bad} з ${total}</span> зображень у RGB — потрібен CMYK/спот.`,
+    dpi_title: "Роздільність зображень",
+    dpi_ok: (dpi) => `Усі зображення ≥ ${dpi} DPI.`,
+    dpi_bad: (bad, total, dpi, list) => `<span class="val">${bad} з ${total}</span> нижче ${dpi} DPI: ${list}`,
+    hairline_title: "Тонкі лінії (hairline)",
+    hairline_ok: "Ліній тонших за поріг не знайдено.",
+    hairline_bad: (n, label) => `Знайдено <span class="val">${n}</span> ліній(ії) тонших за поріг профілю «${label}».`,
+    fonts_title: "Шрифти",
+    fonts_ok: "Усі шрифти вбудовані.",
+    fonts_bad: (list) => `Не вбудовано: <span class="val">${list || '—'}</span>`,
+    overprint_title: "Overprint",
+    overprint_ok: "Білого overprint не знайдено.",
+    overprint_bad: "Знайдено білі об'єкти з увімкненим overprint — під час друку вони можуть зникнути (не виведуться поверх підкладки).",
+    overprint_black_note: (n) => `Чорний overprint: <span class="val">${n}</span> — нормальна практика (rich black), нічого робити не треба.`,
+    overprint_other_note: (n) => `Overprint іншого кольору: <span class="val">${n}</span> — перевірте вручну, чи це навмисно: на не чорних об'єктах це може змінити колір після друку.`,
+    trim_marks_title: "Мітки для обрізки та суміщення (crop marks)",
+    trim_marks_ok: "Мітки для обрізки та суміщення знайдено біля кутів сторінки.",
+    trim_marks_bad: "Не оцінено автоматично — залежність від вимог друкарні. Деякі друкарні вимагають мітки для обрізки та суміщення; уточніть у друкарні, чи вони потрібні, або додайте їх у програмі дизайну (напр. \"Printer's Marks\" в Illustrator).",
+    page_size_title: "Однаковість розміру сторінок",
+    page_size_ok: "Усі сторінки однакового розміру.",
+    page_size_bad: (count, list) => `<span class="val">${count}</span> стор. відрізняється розміром від стор. 1 (${list}) — поширена помилка експорту, через яку сторінки можуть обрізатись або надрукуватись неправильно.`,
+    spot_colors_title: "Спот-кольори (plate colors)",
+    spot_colors_none: "Спот-кольорів не знайдено (лише тріадні CMYK).",
+    spot_colors_list: (list) => `Знайдено: ${list}`,
+    spot_colors_conflict_note: " · ⚠ та сама назва визначена з різними значеннями кольору — ймовірно, дві різні фарби випадково мають однакову назву.",
+    quiz_link_text: "Додати розмір деталі (опційно) →",
+    feedback_fab: "Відгук",
+    feedback_title: "Є відгук або знайшли помилку?",
+    feedback_message_placeholder: "Що сталося, або що б допомогло?",
+    feedback_email_label: "Ваш email (опційно, для відповіді)",
+    feedback_send: "Надіслати",
+    feedback_cancel: "Скасувати",
+    feedback_empty_note: "Спершу напишіть кілька слів.",
+    feedback_sending: "Надсилаємо…",
+    feedback_success_message: "Дякуємо за відгук!",
+    feedback_send_error: "Не вдалося надіслати, спробуйте ще раз за хвилину.",
+    method_hints: {
+      carton: "Картон — тверда коробка/пачка, яка тримає форму.",
+      label: "Етикетка — наклейка на банку/пляшку.",
+      flexible: "Плівка/флексо — гнучка упаковка, пакет, стретч.",
+      digital: "Цифровий друк — власний принтер або цифровий друк без плівок.",
+    },
+    quiz_q2_title: "Фінальний розмір після обрізки (опційно)",
+    quiz_q2_hint: "Звіримо з вашим файлом після перевірки.",
+    quiz_width_label: "Ширина (мм)",
+    quiz_height_label: "Висота (мм)",
+    quiz_caliper_title: "Товщина картону (опційно, лише для картону)",
+    quiz_caliper_hint: "Підкажемо орієнтовні мінімуми для клейової клапані та відстані між біговками — це загальний орієнтир, не жорсткий стандарт.",
+    quiz_caliper_label: "Товщина (мм)",
+    caliper_recommendation_title: "Рекомендація за товщиною картону",
+    caliper_recommendation_text: (caliper, flapLow, flapHigh, creaseMin) =>
+      `Орієнтовна відправна точка для картону <span class="val">${caliper} мм</span>: клапан для склеювання <span class="val">${flapLow}–${flapHigh} мм</span>, мінімальна відстань між біговками <span class="val">${creaseMin} мм</span>. Це не інженерний стандарт — фінальні розміри завжди узгоджуйте з виробником коробки, вони залежать від стилю конструкції та обладнання.`,
+    caliper_recommendation_thick_note: "Для такого товстого картону розбіжності між обладнанням різних виробників особливо суттєві — уточнення точних розмірів перед друком є обов'язковим.",
+    dieline_title: "Назви ліній різу/біговки",
+    dieline_intro: (list) => `Знайдено назви, що часто позначають лінії різу/біговки/клею: ${list}. Визначено за поширеними назвами — перевір вручну, якщо твій файл використовує інші позначення.`,
+    dieline_cat_cut: "Різ",
+    dieline_cat_crease: "Біговка/згин",
+    dieline_cat_glue: "Клей",
+    dieline_cat_die: "Штанц",
+    dieline_cat_perforation: "Перфорація",
+    declared_size_title: "Заявлений розмір",
+    declared_size_match: (w, h, aw, ah) => `Ви вказали <span class="val">${w}×${h} мм</span> — файл має ${aw}×${ah} мм, збігається.`,
+    declared_size_mismatch: (w, h, aw, ah) => `Ви вказали <span class="val">${w}×${h} мм</span>, але файл має <span class="val">${aw}×${ah} мм</span> — перевірте, чи завантажили правильний файл.`,
+    pdfx_title: "Формат PDF/X",
+    pdfx_not_declared: "Не PDF/X-файл — більшість звичайних PDF такими і не є. Уточніть вимоги вашої друкарні, якщо він вам потрібен.",
+    pdfx_declared_ok: (version) => `Задекларовано як <span class="val">${version}</span>, з коректним кольоровим профілем — готово для друкарні, що вимагає PDF/X.`,
+    pdfx_declared_no_icc: (version) => `Задекларовано як <span class="val">${version}</span>, але бракує обов'язкового кольорового профілю. Файл не повністю відповідає PDF/X, попри позначку — переекспортуйте з увімкненим керуванням кольором/output intent.`,
+    pdfx_declared_no_oi: (version) => `Задекларовано як <span class="val">${version}</span>, але немає жодної інформації про кольоровий профіль — файл не відповідає PDF/X, попри позначку.`,
+    mysettings_title: "Розширені параметри",
+    thresholds_intro_note: "Ці значення вже налаштовані для вибраного методу друку. Змінюйте лише за вимогами вашої друкарні.",
+    th_bleed_label: "Виліт (мм)",
+    th_dpi_label: "Мін. роздільність (DPI)",
+    th_hairline_label: "Тонка лінія (мм)",
+    dpi_option_other: "Інше",
+    save_thresholds_btn: (methodLabel) => `Зберегти як мої стандартні для «${methodLabel}»`,
+    reset_thresholds_btn: "Скинути до стандартних",
+    thresholds_saved_note: (methodLabel) => `Збережено як стандартні для «${methodLabel}».`,
+    thresholds_reset_note: "Скинуто до стандартних значень.",
+    thresholds_summary: (bleed, dpi, hairline) => `Пороги цієї перевірки: bleed ${bleed} мм · ${dpi} DPI · hairline ${hairline} мм`,
+    errcode: {
+      file_too_large: (max) => `Файл завеликий. Максимум ${max} МБ.`,
+      rate_limited: () => `Забагато запитів. Зачекай хвилину і спробуй ще раз.`,
+      timeout: (s) => `Тайм-аут обробки через ${s}с. Спробуй менший або простіший файл.`,
+      invalid_pdf: () => `Файл пошкоджений або не є коректним PDF. Спробуй експортувати його заново.`,
+      encrypted_pdf: () => `Цей PDF захищений паролем. Зніми захист і завантаж файл ще раз.`,
+    },
+  },
+};
+
+let lang = localStorage.getItem('boxcheck_lang') || 'uk';
+if(!I18N[lang]) lang = 'uk';
+
+function t(){ return I18N[lang]; }
+
+let lastResultData = null;
+
+function applyStaticText(){
+  document.documentElement.lang = lang;
+  document.title = lang === 'uk' ? 'BoxCheck — прегпрес-перевірка макета' : 'BoxCheck — preflight PDF check';
+  document.getElementById('txt-eyebrow').textContent = t().eyebrow;
+  document.getElementById('txt-sub').textContent = t().sub;
+  document.getElementById('txt-h2-method').textContent = t().h2_method;
+  document.getElementById('txt-h2-file').textContent = t().h2_file;
+  document.querySelectorAll('.method').forEach(m => {
+    m.textContent = t().methods[m.dataset.v];
+  });
+  runBtn.textContent = runBtn.dataset.busy === '1' ? t().run_btn_busy : t().run_btn;
+  document.getElementById('txt-footer').textContent = t().footer;
+  document.getElementById('footerAboutToggle').textContent = t().footer_about_title;
+  document.getElementById('footerAboutPanel').textContent = t().footer_about_text;
+  document.getElementById('footerPrivacyToggle').textContent = t().footer_privacy_title;
+  document.getElementById('footerPrivacyPanel').textContent = t().footer_privacy_text;
+  document.getElementById('footerContactLink').textContent = t().footer_contact_title;
+  document.getElementById('txt-method-note').textContent = t().method_note;
+  document.getElementById('txt-method-unsure-hint').textContent = t().method_unsure_hint;
+  document.getElementById('txt-upload-limits').textContent = t().upload_limits(MAX_FILE_SIZE_MB);
+
+  if(!selectedFile){
+    dropTitle.textContent = t().drop_title_empty;
+    dropSub.textContent = t().drop_sub_empty;
+  } else {
+    dropTitle.textContent = selectedFile.name;
+    dropSub.textContent = t().drop_sub_ready((selectedFile.size/1024/1024).toFixed(2));
+  }
+  document.getElementById('replaceFileBtn').textContent = t().replace_file_btn;
+  document.getElementById('removeFileBtn').textContent = t().remove_file_btn;
+  document.getElementById('newCheckBtn').textContent = t().new_check_btn;
+
+  document.querySelectorAll('#langswitch button').forEach(b => {
+    b.classList.toggle('active', b.dataset.lang === lang);
+  });
+
+  document.getElementById('txt-thresholds-intro-note').textContent = t().thresholds_intro_note;
+  document.getElementById('thresholdsToggle').textContent = t().mysettings_title;
+  document.getElementById('txt-th-bleed-label').textContent = t().th_bleed_label;
+  document.getElementById('txt-th-dpi-label').textContent = t().th_dpi_label;
+  document.getElementById('txt-th-hairline-label').textContent = t().th_hairline_label;
+  document.getElementById('opt-dpi-custom').textContent = t().dpi_option_other;
+  document.getElementById('resetThresholdsBtn').textContent = t().reset_thresholds_btn;
+  document.getElementById('saveThresholdsBtn').textContent =
+    t().save_thresholds_btn(t().profiles[printMethod] || printMethod);
+
+  document.getElementById('quizLink').textContent = t().quiz_link_text;
+  document.querySelectorAll('.method-hint').forEach(h => { h.textContent = t().method_hints[h.dataset.v]; });
+  document.getElementById('txt-quiz-q2').textContent = t().quiz_q2_title;
+  document.getElementById('txt-quiz-q2-hint').textContent = t().quiz_q2_hint;
+  document.getElementById('txt-quiz-width-label').textContent = t().quiz_width_label;
+  document.getElementById('txt-quiz-height-label').textContent = t().quiz_height_label;
+  document.getElementById('txt-quiz-caliper-title').textContent = t().quiz_caliper_title;
+  document.getElementById('txt-quiz-caliper-hint').textContent = t().quiz_caliper_hint;
+  document.getElementById('txt-quiz-caliper-label').textContent = t().quiz_caliper_label;
+
+  document.getElementById('feedbackFab').textContent = t().feedback_fab;
+  document.getElementById('txt-feedback-title').textContent = t().feedback_title;
+  document.getElementById('feedbackMessage').placeholder = t().feedback_message_placeholder;
+  document.getElementById('txt-feedback-email-label').textContent = t().feedback_email_label;
+  document.getElementById('feedbackSendBtn').textContent = t().feedback_send;
+  document.getElementById('feedbackCancelBtn').textContent = t().feedback_cancel;
+
+  if(lastResultData){
+    renderResults(lastResultData);
+  }
+}
+
+document.getElementById('langswitch').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-lang]');
+  if(!btn) return;
+  lang = btn.dataset.lang;
+  localStorage.setItem('boxcheck_lang', lang);
+  applyStaticText();
+});
+
+// Server-side PROFILES defaults, fetched once and cached - the server is the
+// single source of truth, no duplicated profile numbers here.
+const profilesPromise = fetch(API_BASE.replace(/\/$/, '') + '/profiles')
+  .then(r => r.json())
+  .catch(() => null);
+
+function thresholdsKey(method){ return 'boxcheck_thresholds_' + method; }
+
+function loadStoredThresholds(method){
+  try {
+    const raw = localStorage.getItem(thresholdsKey(method));
+    if(!raw) return null;
+    const parsed = JSON.parse(raw);
+    if(typeof parsed.bleed_mm !== 'number' || typeof parsed.dpi_threshold !== 'number' || typeof parsed.hairline_mm !== 'number'){
+      return null;
+    }
+    return parsed;
+  } catch(e) { return null; }
+}
+
+const DPI_PRESETS = ['72', '150', '300'];
+
+function getDpiValue(){
+  const sel = document.getElementById('th-dpi-select').value;
+  if(sel === 'other') return parseInt(document.getElementById('th-dpi-custom').value, 10);
+  return parseInt(sel, 10);
+}
+
+function setDpiValue(value){
+  const selEl = document.getElementById('th-dpi-select');
+  const customEl = document.getElementById('th-dpi-custom');
+  if(DPI_PRESETS.includes(String(value))){
+    selEl.value = String(value);
+    customEl.hidden = true;
+    customEl.value = '';
+  } else {
+    selEl.value = 'other';
+    customEl.hidden = false;
+    customEl.value = value;
+  }
+}
+
+document.getElementById('th-dpi-select').addEventListener('change', () => {
+  const customEl = document.getElementById('th-dpi-custom');
+  if(document.getElementById('th-dpi-select').value === 'other'){
+    customEl.hidden = false;
+    customEl.focus();
+  } else {
+    customEl.hidden = true;
+  }
+});
+
+// Populate the "My settings" fields for a given print method: saved
+// localStorage values take priority, otherwise the server's profile default.
+async function populateSettingsFields(method){
+  document.getElementById('thresholdsSaveNote').textContent = '';
+  document.getElementById('saveThresholdsBtn').textContent =
+    t().save_thresholds_btn(t().profiles[method] || method);
+
+  let values = loadStoredThresholds(method);
+  if(!values){
+    const profiles = await profilesPromise;
+    values = profiles && (profiles[method] || profiles.unknown);
+  }
+  if(!values) return;
+  document.getElementById('th-bleed').value = values.bleed_mm;
+  setDpiValue(values.dpi_threshold);
+  document.getElementById('th-hairline').value = values.hairline_mm;
+}
+
+let printMethod = "unknown";
+let selectedFile = null;
+
+function selectMethod(value){
+  document.querySelectorAll('.method').forEach(m => m.classList.toggle('active', m.dataset.v === value));
+  printMethod = value;
+  document.getElementById('quizCaliperQ').hidden = (value !== 'carton');
+  populateSettingsFields(printMethod);
+}
+
+const methodsEl = document.getElementById('methods');
+methodsEl.addEventListener('click', (e) => {
+  const el = e.target.closest('.method');
+  if(!el) return;
+  selectMethod(el.dataset.v);
+});
+
+const quizLink = document.getElementById('quizLink');
+const quizPanel = document.getElementById('quizPanel');
+quizLink.addEventListener('click', () => {
+  quizPanel.hidden = !quizPanel.hidden;
+});
+
+const thresholdsToggle = document.getElementById('thresholdsToggle');
+const thresholdsBody = document.getElementById('thresholdsBody');
+thresholdsToggle.addEventListener('click', () => {
+  thresholdsBody.hidden = !thresholdsBody.hidden;
+});
+
+const feedbackFab = document.getElementById('feedbackFab');
+const feedbackPanel = document.getElementById('feedbackPanel');
+const feedbackForm = document.getElementById('feedbackForm');
+const feedbackSuccess = document.getElementById('feedbackSuccess');
+const feedbackMessage = document.getElementById('feedbackMessage');
+const feedbackEmail = document.getElementById('feedbackEmail');
+const feedbackNote = document.getElementById('feedbackNote');
+
+function setFeedbackNote(text){
+  feedbackNote.textContent = text;
+}
+
+function resetFeedbackForm(){
+  feedbackForm.hidden = false;
+  feedbackSuccess.hidden = true;
+  setFeedbackNote('');
+}
+
+feedbackFab.addEventListener('click', () => {
+  const opening = feedbackPanel.hidden;
+  feedbackPanel.hidden = !feedbackPanel.hidden;
+  if(opening) resetFeedbackForm();
+});
+document.getElementById('feedbackCancelBtn').addEventListener('click', () => {
+  feedbackPanel.hidden = true;
+});
+document.getElementById('feedbackSendBtn').addEventListener('click', async () => {
+  const message = feedbackMessage.value.trim();
+  if(!message){
+    setFeedbackNote(t().feedback_empty_note);
+    return;
+  }
+  setFeedbackNote(t().feedback_sending);
+  try{
+    const resp = await fetch(`${API_BASE}/api/feedback`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message, email: feedbackEmail.value.trim() }),
+    });
+    if(!resp.ok) throw new Error('feedback request failed');
+    feedbackMessage.value = '';
+    feedbackEmail.value = '';
+    setFeedbackNote('');
+    feedbackForm.hidden = true;
+    feedbackSuccess.textContent = t().feedback_success_message;
+    feedbackSuccess.hidden = false;
+    setTimeout(() => {
+      feedbackPanel.hidden = true;
+      resetFeedbackForm();
+    }, 2200);
+  } catch(err){
+    setFeedbackNote(t().feedback_send_error);
+  }
+});
+
+const drop = document.getElementById('drop');
+const fileInput = document.getElementById('fileInput');
+const dropTitle = document.getElementById('dropTitle');
+const dropSub = document.getElementById('dropSub');
+const dropFileActions = document.getElementById('dropFileActions');
+const runBtn = document.getElementById('runBtn');
+const statusEl = document.getElementById('status');
+
+drop.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', () => { if(fileInput.files[0]) setFile(fileInput.files[0]); });
+
+document.getElementById('replaceFileBtn').addEventListener('click', () => fileInput.click());
+document.getElementById('removeFileBtn').addEventListener('click', () => clearFile());
+document.getElementById('newCheckBtn').addEventListener('click', () => {
+  clearFile();
+  drop.scrollIntoView({ behavior: 'smooth', block: 'center' });
+});
+
+const footerAboutPanel = document.getElementById('footerAboutPanel');
+const footerPrivacyPanel = document.getElementById('footerPrivacyPanel');
+document.getElementById('footerAboutToggle').addEventListener('click', () => {
+  footerAboutPanel.hidden = !footerAboutPanel.hidden;
+  footerPrivacyPanel.hidden = true;
+});
+document.getElementById('footerPrivacyToggle').addEventListener('click', () => {
+  footerPrivacyPanel.hidden = !footerPrivacyPanel.hidden;
+  footerAboutPanel.hidden = true;
+});
+document.getElementById('footerContactLink').addEventListener('click', (e) => {
+  e.preventDefault();
+  if(document.getElementById('resultsPanel').style.display !== 'none'){
+    feedbackPanel.hidden = false;
+    feedbackFab.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  } else {
+    drop.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+});
+
+function clearFile(){
+  selectedFile = null;
+  fileInput.value = '';
+  drop.classList.remove('hasfile');
+  dropTitle.textContent = t().drop_title_empty;
+  dropSub.textContent = t().drop_sub_empty;
+  dropFileActions.hidden = true;
+  runBtn.disabled = true;
+  statusEl.textContent = '';
+  statusEl.classList.remove('err');
+  document.getElementById('resultsPanel').style.display = 'none';
+  lastResultData = null;
+}
+
+['dragenter','dragover'].forEach(ev => drop.addEventListener(ev, (e) => {
+  e.preventDefault(); drop.classList.add('drag');
+}));
+['dragleave','drop'].forEach(ev => drop.addEventListener(ev, (e) => {
+  e.preventDefault(); drop.classList.remove('drag');
+}));
+drop.addEventListener('drop', (e) => {
+  const f = e.dataTransfer.files[0];
+  if(f) setFile(f);
+});
+
+function setFile(f){
+  if(f.type !== 'application/pdf' && !f.name.toLowerCase().endsWith('.pdf')){
+    statusEl.textContent = t().err_pdf_only;
+    statusEl.classList.add('err');
+    return;
+  }
+  if(f.size > MAX_FILE_SIZE_MB * 1024 * 1024){
+    statusEl.textContent = t().err_file_too_large((f.size/1024/1024).toFixed(1), MAX_FILE_SIZE_MB);
+    statusEl.classList.add('err');
+    return;
+  }
+  selectedFile = f;
+  drop.classList.add('hasfile');
+  dropTitle.textContent = f.name;
+  dropSub.textContent = t().drop_sub_ready((f.size/1024/1024).toFixed(2));
+  dropFileActions.hidden = false;
+  runBtn.disabled = false;
+  statusEl.textContent = '';
+  statusEl.classList.remove('err');
+  document.getElementById('resultsPanel').style.display = 'none';
+  lastResultData = null;
+}
+
+runBtn.addEventListener('click', async () => {
+  if(!selectedFile) return;
+  runBtn.disabled = true;
+  runBtn.dataset.busy = '1';
+  runBtn.textContent = t().run_btn_busy;
+  statusEl.classList.remove('err');
+  statusEl.textContent = t().status_uploading;
+
+  try{
+    const url = new URL(API_BASE.replace(/\/$/, '') + '/check');
+    url.searchParams.set('print_method', printMethod);
+    url.searchParams.set('unit', 'mm');
+    url.searchParams.set('bleed_threshold', document.getElementById('th-bleed').value);
+    url.searchParams.set('dpi_threshold', getDpiValue());
+    url.searchParams.set('hairline_threshold', document.getElementById('th-hairline').value);
+
+    const form = new FormData();
+    form.append('file', selectedFile);
+
+    const resp = await fetch(url.toString(), { method:'POST', body: form });
+    if(!resp.ok){
+      const txt = await resp.text();
+      let msg = txt.slice(0, 200);
+      try {
+        const parsed = JSON.parse(txt);
+        const detail = parsed.detail;
+        if(detail && typeof detail === 'object' && detail.code && t().errcode[detail.code]){
+          msg = t().errcode[detail.code](detail.max_mb ?? detail.timeout_s);
+        } else if(detail && typeof detail === 'object' && detail.message){
+          msg = detail.message;
+        } else if(typeof detail === 'string'){
+          msg = detail;
+        } else if(parsed.error){
+          msg = parsed.error;
+        }
+      } catch(e) {}
+      throw new Error(msg);
+    }
+    const data = await resp.json();
+    lastResultData = data;
+    renderResults(data);
+    statusEl.textContent = t().status_done;
+  } catch(err){
+    statusEl.textContent = t().status_error + err.message;
+    statusEl.classList.add('err');
+  } finally {
+    runBtn.disabled = false;
+    runBtn.dataset.busy = '0';
+    runBtn.textContent = t().run_btn;
+  }
+});
+
+function stamp(severity){
+  const cls = { ok: 'pass', warning: 'warn', critical: 'crit', info: 'info' }[severity] || 'pass';
+  const label = { ok: t().stamp_ok, warning: t().stamp_warn, critical: t().stamp_crit, info: t().stamp_info }[severity] || t().stamp_ok;
+  return `<div class="stamp ${cls}">${label}</div>`;
+}
+
+function rowClass(severity){
+  if(severity === 'critical') return 'row crit';
+  if(severity === 'warning') return 'row warn';
+  return 'row';
+}
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function renderResults(d){
+  const meta = d.thresholds_used;
+  const profileLabel = t().profiles[d.print_method] || t().profiles.unknown;
+  const headerMethodLabel = d.print_method === 'unknown' ? t().print_method_not_specified : profileLabel;
+  document.getElementById('resFn').textContent = d.filename || '';
+  document.getElementById('resMeta').textContent = t().res_meta(headerMethodLabel, d.page_count);
+
+  const rows = [];
+  const addRow = (severity, title, detailHtml) => {
+    rows.push({ severity, html: `
+      <div class="${rowClass(severity)}">
+        ${stamp(severity)}
+        <div class="row-body">
+          <div class="row-title">${title}</div>
+          <div class="row-detail">${detailHtml}</div>
+        </div>
+      </div>` });
+  };
+
+  // Bleed - critical only for a confirmed insufficient bleed (TrimBox is
+  // explicitly set and the actual bleed is below the profile threshold).
+  // A missing TrimBox is just insufficient data, not a confirmed problem,
+  // so it's a warning regardless of manual size. A detected dieline makes
+  // the rectangular check meaningless, so it's skipped entirely in favor
+  // of a single info note.
+  if(hasDielineHints(d)){
+    addRow('info', t().bleed_title, t().bleed_dieline_note);
+  } else {
+    const severity = bleedSeverity(d);
+    const detail = `
+      <div class="row-detail-line">${t().bleed_expected(meta.bleed_mm)}</div>
+      <div class="row-detail-line">${t().bleed_detected(d.bleed_mm)}</div>
+      ${!d.has_bleed ? `<div class="row-detail-line">${t().bleed_no_box}</div>` : ''}`;
+    addRow(severity, t().bleed_title, detail);
+  }
+
+  // Images: RGB (most print shops require CMYK/spot, so a hit here means
+  // rework before print - same level as low DPI or unembedded fonts) + DPI
+  {
+    const imgs = d.images || [];
+    const rgbBad = imgs.filter(i => i.rgb_warning);
+    const loresBad = imgs.filter(i => i.low_res_warning);
+    if(imgs.length === 0){
+      addRow('ok', t().images_title, t().images_none);
+    } else {
+      addRow(
+        rgbSeverity(imgs),
+        t().rgb_title,
+        rgbBad.length === 0 ? t().rgb_ok(imgs.length) : t().rgb_bad(rgbBad.length, imgs.length)
+      );
+      addRow(
+        loresBad.length === 0 ? 'ok' : 'warning',
+        t().dpi_title,
+        loresBad.length === 0
+          ? t().dpi_ok(meta.dpi_threshold)
+          : t().dpi_bad(loresBad.length, imgs.length, meta.dpi_threshold, loresBad.map(i => (i.dpi ?? '?') + ' dpi').join(', '))
+      );
+    }
+  }
+
+  // Hairlines
+  {
+    const ok = !d.hairline_warning;
+    addRow(ok ? 'ok' : 'warning', t().hairline_title,
+      ok ? t().hairline_ok : t().hairline_bad(d.thin_lines_count, profileLabel));
+  }
+
+  // Fonts
+  {
+    const ok = !d.unembedded_fonts_warning;
+    const unembedded = (d.fonts || []).filter(f => !f.embedded).map(f => f.name);
+    addRow(ok ? 'ok' : 'warning', t().fonts_title,
+      ok ? t().fonts_ok : t().fonts_bad(unembedded.join(', ')));
+  }
+
+  // Overprint
+  {
+    const ok = !d.overprint_white_warning;
+    const lines = [`<div class="row-detail-line">${ok ? t().overprint_ok : t().overprint_bad}</div>`];
+    if(d.overprint_black_count > 0){
+      lines.push(`<div class="row-detail-line">${t().overprint_black_note(d.overprint_black_count)}</div>`);
+    }
+    if(d.overprint_other_count > 0){
+      lines.push(`<div class="row-detail-line">${t().overprint_other_note(d.overprint_other_count)}</div>`);
+    }
+    addRow(ok ? 'ok' : 'warning', t().overprint_title, lines.join(''));
+  }
+
+  // Trim marks - "not found" is informational (depends entirely on the print
+  // shop's own requirements), never a red/orange warning.
+  {
+    const found = !d.trim_marks_warning;
+    addRow(found ? 'ok' : 'info', t().trim_marks_title, found ? t().trim_marks_ok : t().trim_marks_bad);
+  }
+
+  // Page size consistency
+  if(d.page_count > 1){
+    const ok = !d.page_size_consistency_warning;
+    const pages = (d.inconsistent_pages || []).join(', ');
+    addRow(ok ? 'ok' : 'warning', t().page_size_title,
+      ok ? t().page_size_ok : t().page_size_bad(d.inconsistent_page_count, pages));
+  }
+
+  // Spot colors: a plain list is informational, a name reused with different
+  // values is an actionable warning.
+  {
+    const spots = d.spot_colors || [];
+    let severity, detail;
+    if(spots.length === 0){
+      severity = 'ok';
+      detail = t().spot_colors_none;
+    } else if(d.spot_colors_conflict_warning){
+      severity = 'warning';
+      const list = spots.map(sc => escapeHtml(sc.name) + (sc.duplicate_conflict ? ' ⚠' : '')).join(', ');
+      detail = t().spot_colors_list(list) + t().spot_colors_conflict_note;
+    } else {
+      severity = 'info';
+      detail = t().spot_colors_list(spots.map(sc => escapeHtml(sc.name)).join(', '));
+    }
+    addRow(severity, t().spot_colors_title, detail);
+  }
+
+  // PDF/X compliance: not declared = informational (most files aren't, and
+  // that's fine); declared-but-broken is an actionable warning.
+  {
+    const pdfx = d.pdfx_compliance || {};
+    let severity, detail;
+    if(!pdfx.is_pdfx){
+      severity = 'info';
+      detail = t().pdfx_not_declared;
+    } else if(pdfx.has_output_intent && pdfx.has_icc_profile){
+      severity = 'ok';
+      detail = t().pdfx_declared_ok(pdfx.version);
+    } else if(pdfx.has_output_intent){
+      severity = 'warning';
+      detail = t().pdfx_declared_no_icc(pdfx.version);
+    } else {
+      severity = 'warning';
+      detail = t().pdfx_declared_no_oi(pdfx.version);
+    }
+    addRow(severity, t().pdfx_title, detail);
+  }
+
+  // Declared size (only shown if the user filled in the optional quiz field)
+  {
+    const declaredW = parseFloat(document.getElementById('quizWidth').value);
+    const declaredH = parseFloat(document.getElementById('quizHeight').value);
+    if(!isNaN(declaredW) && !isNaN(declaredH) && declaredW > 0 && declaredH > 0 && d.trimbox){
+      const tb = d.trimbox;
+      const actualW = Math.round(((tb[2] - tb[0]) * 25.4 / 72) * 10) / 10;
+      const actualH = Math.round(((tb[3] - tb[1]) * 25.4 / 72) * 10) / 10;
+      const tol = 2;
+      const direct = Math.abs(actualW - declaredW) <= tol && Math.abs(actualH - declaredH) <= tol;
+      const swapped = Math.abs(actualW - declaredH) <= tol && Math.abs(actualH - declaredW) <= tol;
+      const ok = direct || swapped;
+      addRow(ok ? 'ok' : 'warning', t().declared_size_title,
+        ok ? t().declared_size_match(declaredW, declaredH, actualW, actualH)
+           : t().declared_size_mismatch(declaredW, declaredH, actualW, actualH));
+    }
+  }
+
+  // Caliper-based recommendation (carton only, purely informational, user input only)
+  {
+    const caliper = parseFloat(document.getElementById('quizCaliper').value);
+    if(d.print_method === 'carton' && !isNaN(caliper) && caliper > 0){
+      const { flapLow, flapHigh, creaseMin } = caliperRecommendation(caliper);
+      let text = t().caliper_recommendation_text(caliper, flapLow, flapHigh, creaseMin);
+      if(caliper >= 1.0) text += ' ' + t().caliper_recommendation_thick_note;
+      addRow('info', t().caliper_recommendation_title, text);
+    }
+  }
+
+  // Dieline line-name hints (best-effort, informational only - omitted entirely when nothing found)
+  {
+    const hints = d.dieline_hints || [];
+    if(hints.length > 0){
+      const catLabel = (cat) => t()['dieline_cat_' + cat] || cat;
+      const list = hints.map(h => `${catLabel(h.category)}: ${h.names.map(escapeHtml).join(', ')}`).join(' · ');
+      addRow('info', t().dieline_title, t().dieline_intro(list));
+    }
+  }
+
+  // Summary box: tally severities across every row actually shown.
+  const counts = { critical: 0, warning: 0, info: 0, ok: 0 };
+  rows.forEach(r => { counts[r.severity] = (counts[r.severity] || 0) + 1; });
+  const total = rows.length;
+  const statusKey = summaryStatusKey(counts);
+  const statusClass = { critical: 'status-critical', manual: 'status-manual', ready: 'status-ready' }[statusKey];
+  const statusText = {
+    critical: t().summary_status_critical,
+    manual: t().summary_status_manual,
+    ready: t().summary_status_ready,
+  }[statusKey];
+  const summaryMessage = {
+    critical: t().summary_message_critical,
+    manual: t().summary_message_manual(counts.warning),
+    ready: t().summary_message_ready,
+  }[statusKey];
+  document.getElementById('summaryBox').innerHTML = `
+    <div class="summary-message">${summaryMessage}</div>
+    <div class="summary-stats">
+      <div class="summary-stat crit"><span class="summary-num">${counts.critical}</span><span class="summary-label">${t().summary_critical}</span></div>
+      <div class="summary-stat warn"><span class="summary-num">${counts.warning}</span><span class="summary-label">${t().summary_warning}</span></div>
+      <div class="summary-stat info"><span class="summary-num">${counts.info}</span><span class="summary-label">${t().summary_info}</span></div>
+      <div class="summary-stat total"><span class="summary-num">${total}</span><span class="summary-label">${t().summary_checked}</span></div>
+    </div>
+    <div class="summary-status ${statusClass}">${statusText}</div>`;
+
+  document.getElementById('resultsBody').innerHTML = rows.map(r => r.html).join('');
+  document.getElementById('resultsPanel').style.display = 'block';
+
+  document.getElementById('thresholdsSummary').textContent =
+    t().thresholds_summary(meta.bleed_mm, meta.dpi_threshold, meta.hairline_mm);
+}
+
+document.getElementById('saveThresholdsBtn').addEventListener('click', () => {
+  const method = printMethod;
+  const bleed = parseFloat(document.getElementById('th-bleed').value);
+  const dpi = getDpiValue();
+  const hairline = parseFloat(document.getElementById('th-hairline').value);
+  if(isNaN(bleed) || isNaN(dpi) || isNaN(hairline)) return;
+  try {
+    localStorage.setItem(thresholdsKey(method), JSON.stringify({
+      bleed_mm: bleed, dpi_threshold: dpi, hairline_mm: hairline,
+    }));
+  } catch(e) {}
+  document.getElementById('thresholdsSaveNote').textContent =
+    t().thresholds_saved_note(t().profiles[method] || method);
+});
+
+document.getElementById('resetThresholdsBtn').addEventListener('click', async () => {
+  const method = printMethod;
+  try { localStorage.removeItem(thresholdsKey(method)); } catch(e) {}
+  const profiles = await profilesPromise;
+  const defaults = profiles && (profiles[method] || profiles.unknown);
+  if(!defaults) return;
+  document.getElementById('th-bleed').value = defaults.bleed_mm;
+  setDpiValue(defaults.dpi_threshold);
+  document.getElementById('th-hairline').value = defaults.hairline_mm;
+  document.getElementById('thresholdsSaveNote').textContent = t().thresholds_reset_note;
+});
+
+applyStaticText();
+populateSettingsFields(printMethod);
+</script>
+
+</body>
+</html>

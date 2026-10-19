@@ -1,0 +1,36 @@
+{
+  "gs_command": [
+    "gs",
+    "-dBATCH",
+    "-dNOPAUSE",
+    "-dSAFER",
+    "-dQUIET",
+    "-sDEVICE=tiffsep",
+    "-r150.00",
+    "-dFirstPage=1",
+    "-dLastPage=1",
+    "-sOutputFile=/tmp/boxcheck-composite-proto-vhktd0vd/composite.tif",
+    "/tmp/boxcheck-composite-proto-vhktd0vd/input.pdf"
+  ],
+  "width_px": 4246,
+  "height_px": 3363,
+  "separations_found": [
+    "Black",
+    "Cyan",
+    "Lak",
+    "Magenta",
+    "PANTONE 3262 C",
+    "PANTONE Black C",
+    "White-1",
+    "Yellow"
+  ],
+  "white1_vs_naive_comparison": {
+    "compared_width": 4246,
+    "compared_height": 3363,
+    "mask_inked_pixel_count": 13675994,
+    "mask_not_inked_pixel_count": 603304,
+    "mean_abs_diff_inside_mask": 337.0692865907955,
+    "mean_abs_diff_outside_mask": 2.140105154283744,
+    "max_abs_diff_inside_mask": 1020.0
+  }
+}
